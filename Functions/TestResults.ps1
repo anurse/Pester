@@ -256,7 +256,7 @@ function Write-NUnitTestSuiteAttributes($TestSuiteInfo, [System.Xml.XmlWriter] $
     }
 }
 
-function Write-NUnitDescribeChildElements([object[]] $TestResults, [System.Xml.XmlWriter] $XmlWriter, [switch] $LegacyFormat, [string] $DescribeName)
+function Write-NUnitContextChildElements([object[]] $TestResults, [System.Xml.XmlWriter] $XmlWriter, [switch] $LegacyFormat, [string] $DescribeName, [string] $ContextName)
 {
     $suites = $TestResults | Group-Object -Property ParameterizedSuiteName
 
@@ -278,7 +278,7 @@ function Write-NUnitDescribeChildElements([object[]] $TestResults, [System.Xml.X
             $XmlWriter.WriteStartElement('results')
         }
 
-        Write-NUnitTestCaseElements -TestResults $suite.Group -XmlWriter $XmlWriter -LegacyFormat:$LegacyFormat -DescribeName $DescribeName -ParameterizedSuiteName $suite.Name
+        Write-NUnitTestCaseElements -TestResults $suite.Group -XmlWriter $XmlWriter -LegacyFormat:$LegacyFormat -DescribeName $DescribeName -ContextName $ContextName -ParameterizedSuiteName $suite.Name
 
         if ($suite.Name)
         {
@@ -288,13 +288,46 @@ function Write-NUnitDescribeChildElements([object[]] $TestResults, [System.Xml.X
     }
 }
 
-function Write-NUnitTestCaseElements([object[]] $TestResults, [System.Xml.XmlWriter] $XmlWriter, [switch] $LegacyFormat, [string] $DescribeName, [string] $ParameterizedSuiteName)
+function Write-NUnitDescribeChildElements([object[]] $TestResults, [System.Xml.XmlWriter] $XmlWriter, [switch] $LegacyFormat, [string] $DescribeName)
+{
+    # Create suites for contexts
+    $suites = $TestResults | Group-Object -Property Context
+
+    foreach ($suite in $suites)
+    {
+        if ($suite.Name)
+        {
+            $suiteInfo = Get-TestSuiteInfo -TestSuiteGroup $suite
+
+            $XmlWriter.WriteStartElement('test-suite')
+
+            if (-not $LegacyFormat)
+            {
+                $suiteInfo.Name = "$DescribeName.$($suiteInfo.Name)"
+            }
+
+            Write-NUnitTestSuiteAttributes -TestSuiteInfo $suiteInfo -TestSuiteType 'TestFixture' -XmlWriter $XmlWriter -LegacyFormat:$LegacyFormat
+
+            $XmlWriter.WriteStartElement('results')
+        }
+
+        Write-NUnitContextChildElements -TestResults $suite.Group -XmlWriter $XmlWriter -LegacyFormat:$LegacyFormat -DescribeName $DescribeName -ContextName $suite.Name
+
+        if ($suite.Name)
+        {
+            $XmlWriter.WriteEndElement()
+            $XmlWriter.WriteEndElement()
+        }
+    }
+}
+
+function Write-NUnitTestCaseElements([object[]] $TestResults, [System.Xml.XmlWriter] $XmlWriter, [switch] $LegacyFormat, [string] $DescribeName, [string] $ContextName, [string] $ParameterizedSuiteName)
 {
     foreach ($testResult in $TestResults)
     {
         $XmlWriter.WriteStartElement('test-case')
 
-        Write-NUnitTestCaseAttributes -TestResult $testResult -XmlWriter $XmlWriter -LegacyFormat:$LegacyFormat -DescribeName $DescribeName -ParameterizedSuiteName $ParameterizedSuiteName
+        Write-NUnitTestCaseAttributes -TestResult $testResult -XmlWriter $XmlWriter -LegacyFormat:$LegacyFormat -DescribeName $DescribeName -ContextName $ContextName -ParameterizedSuiteName $ParameterizedSuiteName
 
         $XmlWriter.WriteEndElement()
     }
@@ -336,8 +369,12 @@ function Write-NUnitTestCaseAttributes($TestResult, [System.Xml.XmlWriter] $XmlW
 
             $testName = "$testName($paramString)"
         }
-
+        
+        if($ContextName) {
+            $testName = "$ContextName.$testName"
+        }
         $testName = "$DescribeName.$testName"
+        
 
         $XmlWriter.WriteAttributeString('description', $TestResult.Name)
     }

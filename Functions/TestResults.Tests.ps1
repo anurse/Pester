@@ -342,6 +342,40 @@ InModuleScope Pester {
             $xmlTestResult.time            | Should Be 2.1
         }
 
+        it "should create nested suite for context" {
+            #create state
+            $TestResults = New-PesterState -Path TestDrive:\
+            $testResults.EnterDescribe('Mocked Describe')
+            $testResults.EnterContext('Mocked Context')
+            $TestResults.AddTestResult("Successful testcase",'Passed',[timespan]10000000) #1.0 seconds
+
+            #export and validate the file
+            $testFile = "$TestDrive\Results\Tests.xml"
+            Export-NunitReport $testResults $testFile
+            $xmlResult = [xml] (Get-Content $testFile)
+
+            $xmlDescribeResult = $xmlResult.'test-results'.'test-suite'.results.'test-suite'
+            $xmlDescribeResult.type            | Should Be "TestFixture"
+            $xmlDescribeResult.name            | Should Be "Mocked Describe"
+            $xmlDescribeResult.description     | Should Be "Mocked Describe"
+            $xmlDescribeResult.result          | Should Be "Success"
+            $xmlDescribeResult.success         | Should Be "True"
+            $xmlDescribeResult.time            | Should Be 1.0
+
+            $xmlContextSuite = $xmlResult.'test-results'.'test-suite'.results.'test-suite'.results.'test-suite'
+            $xmlContextSuite.type            | Should Be "TestFixture"
+            $xmlContextSuite.name            | Should Be "Mocked Describe.Mocked Context"
+            $xmlContextSuite.description     | Should Be "Mocked Context"
+            $xmlContextSuite.result          | Should Be "Success"
+            $xmlContextSuite.success         | Should Be "True"
+            $xmlContextSuite.time            | Should Be 1.0
+
+            $xmlTestCase = $xmlResult.'test-results'.'test-suite'.'results'.'test-suite'.results.'test-suite'.'results'.'test-case'
+            $xmlTestCase.name     | Should Be "Mocked Describe.Mocked Context.Successful testcase"
+            $xmlTestCase.result   | Should Be "Success"
+            $xmlTestCase.time     | Should Be "1"
+        }
+
         it "should write two test-suite elements for two describes" {
             #create state
             $TestResults = New-PesterState -Path TestDrive:\
